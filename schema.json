@@ -1,0 +1,78 @@
+{
+    "stock_sheet": {
+        "filename": "Stock.xlsx",
+        "columns": [
+            "SKU",
+            "Date",
+            "PL No.",
+            "Item",
+            "Shape",
+            "Size",
+            "Mine",
+            "Grade",
+            "Price Code",
+            "Lot Details (If Any)",
+            "Original weight",
+            "Weight in Hand",
+            "Short/Excess Received",
+            "Issue Qty",
+            "Sold Qty",
+            "# Code",
+            "Remarks"
+        ]
+    },
+    "issue_sheet": {
+        "filename": "Issue.xlsx",
+        "columns": [
+            "Approval Date",
+            "APPROVAL NO.",
+            "SKU",
+            "PL No.",
+            "Item",
+            "Shape",
+            "Size",
+            "Mine",
+            "Grade",
+            "Price Code",
+            "Lot Details (If Any)",
+            "Original weight",
+            "Weight issued",
+            "SELECTION YES/NO",
+            "SELECTION CRITERIA",
+            "ASKING RATE",
+            "BROKER NAME",
+            "PARTY NAME",
+            "Remarks"
+        ]
+    },
+    "issue_return_sheet": {
+        "filename": "Issue_return.xlsx",
+        "columns": [
+            "Approval Date",
+            "APPROVAL NO.",
+            "SKU",
+            "PL No.",
+            "Item",
+            "Shape",
+            "Size",
+            "Mine",
+            "Grade",
+            "Price Code"
+        ]
+    },
+    "sale_sheet": {
+        "filename": "Sale.xlsx",
+        "columns": [
+            "Approval Date",
+            "APPROVAL NO.",
+            "SKU",
+            "PL No.",
+            "Item",
+            "Shape",
+            "Size",
+            "Mine",
+            "Grade",
+            "Price Code"
+        ]
+    }
+}
