@@ -350,3 +350,8 @@ MigrationBackup/
 .ionide/
 lib/
 pyvenv.cfg
+.vscode/
+Issue.xlsx
+Issue_return.xlsx
+Sale.xlsx
+Stock.xlsx
