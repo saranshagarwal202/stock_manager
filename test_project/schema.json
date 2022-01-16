@@ -33,7 +33,16 @@
             "Size",
             "Mine",
             "Grade",
-            "Price Code"
+            "Price Code",
+            "Lot Details (If Any)",
+            "Original weight",
+            "Weight issued",
+            "SELECTION YES/NO",
+            "SELECTION CRITERIA",
+            "ASKING RATE",
+            "BROKER NAME",
+            "PARTY NAME",
+            "Remarks"
         ]
     },
     "issue_return_sheet": {
@@ -65,5 +74,6 @@
             "Grade",
             "Price Code"
         ]
-    }
+    },
+    "approval_no": 1
 }
