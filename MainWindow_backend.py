@@ -3,13 +3,17 @@ from MainWindow import Ui_MainWindow
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtCore as qtc
 from PyQt5 import QtGui as qtg
+from PyQt5 import QtPrintSupport as qtp
 
 from copy import copy, deepcopy
 import pandas as pd
 import json
 import os
 from datetime import date
-
+# import pip
+# pip.main(['install', 'python-docx'])
+import docx
+from docx.enum.style import WD_STYLE_TYPE
 
 class MainWindow(qtw.QMainWindow):
 
@@ -80,8 +84,12 @@ class MainWindow(qtw.QMainWindow):
             lambda: self.ui.add_sku.setEnabled(False))
         self.ui.clear_issue_stock.clicked.connect(
             lambda: self.ui.enter_sku_code.clear())
-        self.ui.Delete_issue_items.clicked.connect(self.delete_item_from_issue_table)
+        self.ui.clear_issue_stock.clicked.connect(
+            lambda: self.ui.Weight_to_add.clear())
+        self.ui.Delete_issue_items.clicked.connect(
+            self.delete_item_from_issue_table)
         self.ui.reset_issue_items.clicked.connect(self.reset_issue_items)
+        self.ui.approval_issue.clicked.connect(self.issue_approval)
         # self.ui.clear_issue_stock.clicked.connect(
         #     lambda: self.ui.Weight_to_add.clear())
         self.ui.add_sku.clicked.connect(self.add_sku)
@@ -277,6 +285,7 @@ class MainWindow(qtw.QMainWindow):
         self.ui.broker_name.setPalette(self.style().standardPalette())
         self.ui.party_name.setPalette(self.style().standardPalette())
         self.ui.Weight_to_add.setPalette(self.style().standardPalette())
+        self.ui.enter_sku_code.setPalette(self.style().standardPalette())
         valid = True
         add = True
         for row in self.issue_sheet:
@@ -314,41 +323,63 @@ class MainWindow(qtw.QMainWindow):
             item_to_add = {"stock index": self.sheet_index_add_sku}
             item_to_add = deepcopy(self.stock_sheet[self.sheet_index_add_sku])
             # check if sku aleady in issue_sheet_skus
-            if item_to_add["SKU"] in self.issue_sheet_skus:
-                self.ui.sku_find.setPalette(self.red_palette())
-                self.ui.statusbar.showMessage("SKU already in approval")
-                return
-            self.issue_sheet_skus.append(copy(item_to_add["SKU"]))
+            # if item_to_add["SKU"] in self.issue_sheet_skus:
+            #     self.ui.enter_sku_code.setPalette(self.red_palette())
+            #     self.ui.statusbar.showMessage("SKU already in approval")
+            #     return
+
             self.stock_sheet[self.sheet_index_add_sku]["Weight in Hand"] -= self.ui.Weight_to_add.value()
             self.stock_sheet[self.sheet_index_add_sku]["Issue Qty"] += self.ui.Weight_to_add.value()
-            for key in ["Weight in Hand",
-                        "Short/Excess Received",
-                        "Issue Qty",
-                        "Sold Qty",
-                        "# Code",
-                        "Remarks",
-                        "Date"]:
-                del(item_to_add[key])
-            item_to_add["Approval Date"] = self.ui.dateEdit_2.date().toString()
-            item_to_add["APPROVAL NO."] = self.ui.approval_no_2.value()
-            item_to_add["BROKER NAME"] = self.ui.broker_name.text()
-            item_to_add["PARTY NAME"] = self.ui.party_name.text()
-            item_to_add["Weight issued"] = self.ui.Weight_to_add.value()
-            item_dict = {}
-            for key in self.schema["issue_sheet"]["columns"]:
-                if item_to_add.get(key):
-                    item_dict[key] = item_to_add[key]
-                else:
-                    item_dict[key] = ''
-            self.ui.issue_items.setEnabled(True)
-            self.issue_sheet_items.append(deepcopy(item_dict))
+            self.load_data_in_tabel(
+                self.ui.current_stock, values=self.stock_sheet[self.sheet_index_add_sku],
+                rowcount=self.ui.current_stock.rowCount(),
+                columns=self.stock_sheet[self.sheet_index_add_sku],
+                affected_row=self.sheet_index_add_sku)
+
+            if self.ui.add_sku.text() == "Add":
+                self.issue_sheet_skus.append(copy(item_to_add["SKU"]))
+                for key in ["Weight in Hand",
+                            "Short/Excess Received",
+                            "Issue Qty",
+                            "Sold Qty",
+                            "# Code",
+                            "Remarks",
+                            "Date"]:
+                    del(item_to_add[key])
+                item_to_add["Approval Date"] = self.ui.dateEdit_2.date(
+                ).toString()
+                item_to_add["APPROVAL NO."] = self.ui.approval_no_2.value()
+                item_to_add["BROKER NAME"] = self.ui.broker_name.text()
+                item_to_add["PARTY NAME"] = self.ui.party_name.text()
+                item_to_add["Weight issued"] = self.ui.Weight_to_add.value()
+                item_dict = {}
+                for key in self.schema["issue_sheet"]["columns"]:
+                    if item_to_add.get(key):
+                        item_dict[key] = item_to_add[key]
+                    else:
+                        item_dict[key] = ''
+                self.ui.issue_items.setEnabled(True)
+                self.issue_sheet_items.append(deepcopy(item_dict))
+                affected_row = self.ui.issue_items.rowCount()
+                row_count = self.ui.issue_items.rowCount()+1
+            else:
+                # If update is required
+                affected_row = 0
+                row_count = self.ui.issue_items.rowCount()
+                for dicti in self.issue_sheet_items:
+                    if dicti["SKU"] == item_to_add["SKU"]:
+                        dicti["Weight issued"] += self.ui.Weight_to_add.value()
+                        item_dict = deepcopy(dicti)
+                        break
+                    affected_row += 1
+                self.ui.add_sku.setText("Add")
             self.load_data_in_tabel(
                 self.ui.issue_items, values=item_dict,
-                rowcount=self.ui.issue_items.rowCount()+1,
+                rowcount=row_count,
                 columns=list(item_dict),
-                affected_row=self.ui.issue_items.rowCount(), read_only=["BROKER NAME",
-                                                                        "PARTY NAME", "Approval Date",
-                                                                        "APPROVAL NO.", "Weight issued"])
+                affected_row=affected_row, read_only=[item for item in list(item_dict) if item not in ["SELECTION YES/NO",
+                                                                                                       "SELECTION CRITERIA",
+                                                                                                       "ASKING RATE", "Remarks"]])
 
             self.ui.approval_issue.setEnabled(True)
             self.ui.Delete_issue_items.setEnabled(True)
@@ -356,27 +387,86 @@ class MainWindow(qtw.QMainWindow):
             self.ui.clear_issue_stock.click()
 
     def issue_approval(self):
-        self.ui.approval_issue.setEnabled(False)
-        self.ui.Delete_issue_items.setEnabled(False)
-        self.ui.reset_issue_items.setEnabled(False)
-        self.clear_tabel(self.ui.issue_items, disable=True, row_count=0)
-
-        # load values from table to issue_sheet_items
-        for row in range(len(self.issue_sheet_items)):
-            for col, index in self.issue_sheet_items[row]:
-                if not bool(self.issue_sheet_items[row][col]):
-                    self.issue_sheet_items[row][col] = self.ui.issue_items.item(row, index).text()
+        filepath = qtw.QFileDialog.getSaveFileName(self, "Save File", filter=".docx")
         
-        doc = docx.Document
+        if bool(filepath):
+            filepath = filepath[0]+ filepath[1]
+            self.ui.approval_issue.setEnabled(False)
+            self.ui.Delete_issue_items.setEnabled(False)
+            self.ui.reset_issue_items.setEnabled(False)
+            self.clear_tabel(self.ui.issue_items, disable=True, row_count=0)
 
+            # load values from table to issue_sheet_items
+            for row in range(len(self.issue_sheet_items)):
+                index = 0
+                for col in list(self.issue_sheet_items[row]):
+                    if not bool(self.issue_sheet_items[row][col]):
+                        try:
+                            self.issue_sheet_items[row][col] = self.ui.issue_items.item(
+                                row, index).text()
+                        except AttributeError:
+                            self.issue_sheet_items[row][col] = self.ui.issue_items.item(
+                                row, index)
+                    index += 1
+
+            doc = docx.Document("test_project/approval_format.docx")
+            p = doc.paragraphs[0]
+            p.clear()
+            p.add_run('APPROVAL NO.: {} \nTo: {} \nDate: {}'.format(
+                self.issue_sheet_items[0]["APPROVAL NO."], self.issue_sheet_items[0]["BROKER NAME"], self.issue_sheet_items[0]["Approval Date"]))
+
+            t = doc.tables[0]
+            # t = doc.add_table(len(self.issue_sheet_items)+1, 4)
+            # headers = ["Sr. No.", "Particulars", "Weight\n(ct)", "Rate"]
+            # for j in range(4):
+            #     t.cell(0, j).text = headers[j]
+            #     t.cell(0, j).bold = True
+
+            # row_template = deepcopy(t.rows[1])
+
+            for i in range(1, len(self.issue_sheet_items)+1):
+                t.add_row()
+                for j in range(4):
+                    if j == 0:
+                        t.cell(i, j).text = str(i)
+                    elif j == 1:
+                        t.cell(i, j).text = "{} {} {}".format(
+                            self.issue_sheet_items[i-1]["SKU"], self.issue_sheet_items[i-1]["Shape"], self.issue_sheet_items[i-1]["Size"])
+                    elif j == 2:
+                        t.cell(i, j).text = str(
+                            self.issue_sheet_items[i-1]["Weight issued"])
+                    elif j == 3:
+                        t.cell(i, j).text = str(
+                            self.issue_sheet_items[i-1]["ASKING RATE"])
+            
+            try:
+                t.style = 'Table-Grid'
+            except:
+                #May only work in windows
+                False
+
+            # print_dlg = qtp.QPrintPreviewDialog()
+            # if print_dlg.exec_() == qtw.QDialog.Accepted:
+            
+            doc.save(filepath)
+
+            self.ui.broker_name.setReadOnly(False)
+            self.ui.party_name.setReadOnly(False)
+            self.ui.dateEdit_2.setReadOnly(False)
+            self.ui.approval_no_2.setReadOnly(False)
+            self.set_approval_no()
 
     def delete_item_from_issue_table(self):
         if len(self.ui.issue_items.selectedIndexes()) == self.ui.issue_items.columnCount() and self.ui.issue_items.selectedIndexes().count(self.ui.issue_items.selectedIndexes()[0]) == len(self.ui.issue_items.selectedIndexes()):
             # save item
-            sheet_index = self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[0].row()]["stock index"]
-            self.stock_sheet[sheet_index]["Weight in Hand"]+=self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[0].row()]["Weight issued"]
-            self.stock_sheet[sheet_index]["Issue Qty"]-=self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[0].row()]["Weight issued"]
-            del(self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[0].row()])
+            sheet_index = self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[
+                0].row()]["stock index"]
+            self.stock_sheet[sheet_index]["Weight in Hand"] += self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[
+                0].row()]["Weight issued"]
+            self.stock_sheet[sheet_index]["Issue Qty"] -= self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[
+                0].row()]["Weight issued"]
+            del(self.issue_sheet_items[self.ui.issue_items.selectedIndexes()[
+                0].row()])
             self.ui.issue_items.removeRow(
                 self.ui.issue_items.selectedIndexes()[0].row())
         else:
@@ -384,21 +474,21 @@ class MainWindow(qtw.QMainWindow):
             for index in indexes:
                 self.ui.issue_items.setItem(
                     index.row(), index.column(), qtw.QTableWidgetItem(str('')))
-                self.issue_sheet[int(self.ui.issue_items.item(index.row(
-                ), 0).text())-1][self.ui.issue_items.horizontalHeaderItem(index.column()).text()] = ''
+
             # self.load_data_in_tabel(self.ui.current_stock, self.issue_sheet, len(
             #     self.issue_sheet), self.schema["stock_sheet"]["columns"])
-    
+
     def reset_issue_items(self):
         for index in range(self.ui.issue_items.rowCount()):
             sheet_index = self.issue_sheet_items[index]["stock index"]
-            self.stock_sheet[sheet_index]["Weight in Hand"]+=self.issue_sheet_items[index]["Weight issued"]
-            self.stock_sheet[sheet_index]["Issue Qty"]-=self.issue_sheet_items[index]["Weight issued"]
+            self.stock_sheet[sheet_index]["Weight in Hand"] += self.issue_sheet_items[index]["Weight issued"]
+            self.stock_sheet[sheet_index]["Issue Qty"] -= self.issue_sheet_items[index]["Weight issued"]
             del(self.issue_sheet_items[index])
             self.ui.issue_items.removeRow(
                 index)
 
     def find_sku(self):
+        self.ui.add_sku.setText("Add")
         self.clear_tabel(self.ui.sku_find, disable=True)
         self.ui.enter_sku_code.setPalette(self.style().standardPalette())
         self.ui.add_sku.setEnabled(False)
@@ -413,15 +503,20 @@ class MainWindow(qtw.QMainWindow):
                 self.sheet_index_add_sku = count
                 break
             count += 1
-        if sku_found != False:
+        if bool(sku_found):
             self.load_data_in_tabel(self.ui.sku_find, values=[
                                     sku_found], rowcount=1, columns=self.schema["stock_sheet"]["columns"])
             self.ui.sku_find.setEnabled(True)
             self.ui.add_sku.setEnabled(True)
+            self.ui.Weight_to_add.setPalette(self.style().standardPalette())
             self.ui.Weight_to_add.setEnabled(True)
-            self.ui.Weight_to_add.setValue(float(sku_found["Weight in Hand"]))
             self.ui.Weight_to_add.setMaximum(
                 float(sku_found["Weight in Hand"]))
+            self.ui.Weight_to_add.setValue(float(sku_found["Weight in Hand"]))
+
+            # If item is already in to be issue items sheet change add to update
+            if sku_found["SKU"] in self.issue_sheet_skus:
+                self.ui.add_sku.setText("Update")
         else:
             self.ui.enter_sku_code.setPalette(self.red_palette())
 
@@ -481,7 +576,7 @@ class MainWindow(qtw.QMainWindow):
         self.ui.sku_find.clearSelection()
         self.ui.issue_items.clearSelection()
         if not self.ui.sku_find.isEnabled():
-            self.ui.enter_sku_code.clear()
+            # self.ui.enter_sku_code.clear()
             self.ui.Weight_to_add.clear()
         if not bool(self.ui.enter_sku_code.text()):
             # self.ui.approval_no_2.palette()
@@ -764,7 +859,8 @@ class MainWindow(qtw.QMainWindow):
                     # here values is one dict
                     item = qtw.QTableWidgetItem(str(values[key]))
                     if key in read_only:
-                        item.setFlags(qtc.Qt.ItemIsEditable)
+                        item.setFlags(qtc.Qt.ItemIsSelectable | qtc.Qt.ItemIsDragEnabled |
+                                      qtc.Qt.ItemIsDropEnabled | qtc.Qt.ItemIsUserCheckable | qtc.Qt.ItemIsEnabled)
                     tabel.setItem(affected_row, col,
                                   item)
             else:
@@ -787,110 +883,121 @@ class MainWindow(qtw.QMainWindow):
             save_path, self.schema["sale_sheet"]["filename"]))
 
     def open_project(self, path=False):
-        self.ui.actionOpen_Project.setEnabled(False)
-        # try:
-        if path == False:
-            self.project_path = qtw.QFileDialog.getExistingDirectory(
-                self, "Select Directory")
-        if bool(self.project_path):
-            f = open(os.path.join(self.project_path, "schema.json"))
-            self.schema = json.loads(f.read())
-            f.close()
 
-            self.stock_sheet = pd.read_excel(os.path.join(
-                self.project_path, self.schema["stock_sheet"]["filename"])).to_dict(orient="records")
-            self.issue_sheet = pd.read_excel(os.path.join(
-                self.project_path, self.schema["issue_sheet"]["filename"])).to_dict(orient="records")
-            self.issue_return_sheet = pd.read_excel(os.path.join(
-                self.project_path, self.schema["issue_return_sheet"]["filename"])).to_dict(orient="records")
-            self.sale_sheet = pd.read_excel(os.path.join(
-                self.project_path, self.schema["sale_sheet"]["filename"])).to_dict(orient="records")
+        try:
 
-            # stock tab
-            self.load_data_in_tabel(self.ui.current_stock, self.stock_sheet, len(
-                self.stock_sheet), self.schema["stock_sheet"]["columns"])
-            self.load_data_in_tabel(self.ui.current_stock_find_entry, [
-            ], 1, self.schema["stock_sheet"]["columns"])
-            self.load_data_in_tabel(
-                self.ui.find_stock_preview, [], 1, self.schema["stock_sheet"]["columns"])
-            self.load_data_in_tabel(self.ui.current_entry_add_stock, [
-            ], 1, self.schema["stock_sheet"]["columns"])
+            if path == False:
+                self.project_path = qtw.QFileDialog.getExistingDirectory(
+                    self, "Select Directory")
+            if bool(self.project_path):
+                f = open(os.path.join(self.project_path, "schema.json"))
+                self.schema = json.loads(f.read())
+                f.close()
 
-            # issue tab
-            self.load_data_in_tabel(self.ui.issued_stock_find_entry, [
-            ], 1, self.schema["issue_sheet"]["columns"])
-            self.load_data_in_tabel(
-                self.ui.issue_stock_preview, [], 1, self.schema["issue_sheet"]["columns"])
-            self.load_data_in_tabel(self.ui.sku_find, [], 1,
-                                    self.schema["stock_sheet"]["columns"])
-            self.load_data_in_tabel(self.ui.issue_items, [],
-                                    0, self.schema["issue_sheet"]["columns"])
+                self.stock_sheet = pd.read_excel(os.path.join(
+                    self.project_path, self.schema["stock_sheet"]["filename"])).to_dict(orient="records")
+                self.issue_sheet = pd.read_excel(os.path.join(
+                    self.project_path, self.schema["issue_sheet"]["filename"])).to_dict(orient="records")
+                self.issue_return_sheet = pd.read_excel(os.path.join(
+                    self.project_path, self.schema["issue_return_sheet"]["filename"])).to_dict(orient="records")
+                self.sale_sheet = pd.read_excel(os.path.join(
+                    self.project_path, self.schema["sale_sheet"]["filename"])).to_dict(orient="records")
 
-            # qtw.QHeaderView.setSectionResizeMode(qtw.QHeaderView.Stretch)
+                # stock tab
+                self.load_data_in_tabel(self.ui.current_stock, self.stock_sheet, len(
+                    self.stock_sheet), self.schema["stock_sheet"]["columns"])
+                self.load_data_in_tabel(self.ui.current_stock_find_entry, [
+                ], 1, self.schema["stock_sheet"]["columns"])
+                self.load_data_in_tabel(
+                    self.ui.find_stock_preview, [], 1, self.schema["stock_sheet"]["columns"])
+                self.load_data_in_tabel(self.ui.current_entry_add_stock, [
+                ], 1, self.schema["stock_sheet"]["columns"])
 
-            self.ui.tabWidget.setTabEnabled(3, True)
-            self.ui.tabWidget.setTabEnabled(2, True)
-            self.ui.tabWidget.setTabEnabled(1, True)
-            self.ui.tabWidget.setTabEnabled(0, True)
-            self.ui.actionSave_As.setEnabled(True)
-            self.ui.actionSave.setEnabled(True)
+                # issue tab
+                self.load_data_in_tabel(self.ui.issued_stock_find_entry, [
+                ], 1, self.schema["issue_sheet"]["columns"])
+                self.load_data_in_tabel(
+                    self.ui.issue_stock_preview, [], 1, self.schema["issue_sheet"]["columns"])
+                self.load_data_in_tabel(self.ui.sku_find, [], 1,
+                                        self.schema["stock_sheet"]["columns"])
+                self.load_data_in_tabel(self.ui.issue_items, [],
+                                        0, self.schema["issue_sheet"]["columns"])
 
-            self.ui.issued_stock_find_entry.horizontalHeader(
-            ).resizeSections(qtw.QHeaderView.ResizeToContents)
-            self.ui.issue_stock_preview.horizontalHeader(
-            ).resizeSections(qtw.QHeaderView.ResizeToContents)
-            self.ui.sku_find.horizontalHeader().resizeSections(
-                qtw.QHeaderView.ResizeToContents)
-            self.ui.issue_items.horizontalHeader().resizeSections(
-                qtw.QHeaderView.ResizeToContents)
+                # qtw.QHeaderView.setSectionResizeMode(qtw.QHeaderView.Stretch)
 
-            self.ui.current_stock_find_entry.horizontalHeader(
-            ).resizeSections(qtw.QHeaderView.ResizeToContents)
-            self.ui.find_stock_preview.horizontalHeader().resizeSections(
-                qtw.QHeaderView.ResizeToContents)
-            self.ui.current_entry_add_stock.horizontalHeader(
-            ).resizeSections(qtw.QHeaderView.ResizeToContents)
-            self.ui.current_stock.horizontalHeader().resizeSections(
-                qtw.QHeaderView.ResizeToContents)
+                self.ui.tabWidget.setTabEnabled(3, True)
+                self.ui.tabWidget.setTabEnabled(2, True)
+                self.ui.tabWidget.setTabEnabled(1, True)
+                self.ui.tabWidget.setTabEnabled(0, True)
+                self.ui.actionSave_As.setEnabled(True)
+                self.ui.actionSave.setEnabled(True)
 
-            # Set Approval No.
-            m1 = max(self.issue_sheet, key=lambda x: x["APPROVAL NO."], default={
-                     "APPROVAL NO.": 0})
-            m2 = max(self.issue_return_sheet, key=lambda x: x["APPROVAL NO."], default={
-                     "APPROVAL NO.": 0})
-            m1 = max(m1["APPROVAL NO."], m2["APPROVAL NO."])
-            if self.schema["approval_no"] < m1:
-                self.schema["approval_no"] = m1+1
-            self.ui.approval_no_2.setValue(self.schema["approval_no"])
-            self.schema["approval_no"] += 1
+                self.ui.issued_stock_find_entry.horizontalHeader(
+                ).resizeSections(qtw.QHeaderView.ResizeToContents)
+                self.ui.issue_stock_preview.horizontalHeader(
+                ).resizeSections(qtw.QHeaderView.ResizeToContents)
+                self.ui.sku_find.horizontalHeader().resizeSections(
+                    qtw.QHeaderView.ResizeToContents)
+                self.ui.issue_items.horizontalHeader().resizeSections(
+                    qtw.QHeaderView.ResizeToContents)
 
-        # except:
-        #     msg = qtw.QMessageBox()
-        #     msg.setText("Unable to open project, please check path/schema")
-        #     msg.setStandardButtons(qtw.QMessageBox.Ok)
-        #     msg.setIcon(qtw.QMessageBox.Warning)
-        #     msg.setModal(True)
-        #     msg.exec()
+                self.ui.current_stock_find_entry.horizontalHeader(
+                ).resizeSections(qtw.QHeaderView.ResizeToContents)
+                self.ui.find_stock_preview.horizontalHeader().resizeSections(
+                    qtw.QHeaderView.ResizeToContents)
+                self.ui.current_entry_add_stock.horizontalHeader(
+                ).resizeSections(qtw.QHeaderView.ResizeToContents)
+                self.ui.current_stock.horizontalHeader().resizeSections(
+                    qtw.QHeaderView.ResizeToContents)
+
+                # Set Approval No.
+                self.set_approval_no()
+            self.ui.actionOpen_Project.setEnabled(False)
+        except:
+            msg = qtw.QMessageBox()
+            msg.setIcon(qtw.QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('Not a valid project folder')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+            # msg = qtw.QMessageBox()
+            # msg.setText("Unable to open project, please check path/schema")
+            # msg.setStandardButtons(qtw.QMessageBox.Ok)
+            # msg.setIcon(qtw.QMessageBox.Warning)
+            # msg.setModal(True)
+            # msg.exec()
+
+    def set_approval_no(self):
+        m1 = max(self.issue_sheet, key=lambda x: x["APPROVAL NO."], default={
+            "APPROVAL NO.": 0})
+        m2 = max(self.issue_return_sheet, key=lambda x: x["APPROVAL NO."], default={
+            "APPROVAL NO.": 0})
+        m1 = max(m1["APPROVAL NO."], m2["APPROVAL NO."])
+        if self.schema["approval_no"] < m1:
+            self.schema["approval_no"] = m1+1
+        self.ui.approval_no_2.setValue(self.schema["approval_no"])
+        self.schema["approval_no"] += 1
 
     def New_project(self):
         self.project_path = qtw.QFileDialog.getExistingDirectory(
             self, "Select Directory")
-        f = open("schema.json")
-        self.schema = json.loads(f.read())
-        f.close()
-        f = open(os.path.join(self.project_path, "schema.json"), "w")
-        f.write(json.dumps(self.schema))
-        f.close()
-        pd.DataFrame(columns=self.schema["stock_sheet"]["columns"]).to_excel(os.path.join(
-            self.project_path, self.schema["stock_sheet"]["filename"]), index=False)
-        pd.DataFrame(columns=self.schema["issue_sheet"]["columns"]).to_excel(os.path.join(
-            self.project_path, self.schema["issue_sheet"]["filename"]), index=False)
-        pd.DataFrame(columns=self.schema["issue_return_sheet"]["columns"]).to_excel(os.path.join(
-            self.project_path, self.schema["issue_return_sheet"]["filename"]), index=False)
-        pd.DataFrame(columns=self.schema["sale_sheet"]["columns"]).to_excel(os.path.join(
-            self.project_path, self.schema["sale_sheet"]["filename"]), index=False)
+        if bool(self.project_path):
+            f = open("schema.json")
+            self.schema = json.loads(f.read())
+            f.close()
+            f = open(os.path.join(self.project_path, "schema.json"), "w")
+            f.write(json.dumps(self.schema))
+            f.close()
+            pd.DataFrame(columns=self.schema["stock_sheet"]["columns"]).to_excel(os.path.join(
+                self.project_path, self.schema["stock_sheet"]["filename"]), index=False)
+            pd.DataFrame(columns=self.schema["issue_sheet"]["columns"]).to_excel(os.path.join(
+                self.project_path, self.schema["issue_sheet"]["filename"]), index=False)
+            pd.DataFrame(columns=self.schema["issue_return_sheet"]["columns"]).to_excel(os.path.join(
+                self.project_path, self.schema["issue_return_sheet"]["filename"]), index=False)
+            pd.DataFrame(columns=self.schema["sale_sheet"]["columns"]).to_excel(os.path.join(
+                self.project_path, self.schema["sale_sheet"]["filename"]), index=False)
 
-        self.open_project(path=True)
+            self.open_project(path=True)
         # self.ui.tabWidget.setTabEnabled(3, True)
         # self.ui.tabWidget.setTabEnabled(2, True)
         # self.ui.tabWidget.setTabEnabled(1, True)
