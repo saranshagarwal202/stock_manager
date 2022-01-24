@@ -48,6 +48,8 @@
     "issue_return_sheet": {
         "filename": "Issue_return.xlsx",
         "columns": [
+            "Weight returned",
+            "Return Date",
             "Approval Date",
             "APPROVAL NO.",
             "SKU",
@@ -57,7 +59,16 @@
             "Size",
             "Mine",
             "Grade",
-            "Price Code"
+            "Price Code",
+            "Lot Details (If Any)",
+            "Original weight",
+            "Weight issued",
+            "SELECTION YES/NO",
+            "SELECTION CRITERIA",
+            "ASKING RATE",
+            "BROKER NAME",
+            "PARTY NAME",
+            "Remarks"
         ]
     },
     "sale_sheet": {
@@ -72,7 +83,16 @@
             "Size",
             "Mine",
             "Grade",
-            "Price Code"
+            "Price Code",
+            "Lot Details (If Any)",
+            "Original weight",
+            "Weight issued",
+            "SELECTION YES/NO",
+            "SELECTION CRITERIA",
+            "ASKING RATE",
+            "BROKER NAME",
+            "PARTY NAME",
+            "Remarks"
         ]
     },
     "approval_no": 1

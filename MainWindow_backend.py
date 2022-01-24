@@ -10,10 +10,8 @@ import pandas as pd
 import json
 import os
 from datetime import date
-# import pip
-# pip.main(['install', 'python-docx'])
 import docx
-from docx.enum.style import WD_STYLE_TYPE
+
 
 class MainWindow(qtw.QMainWindow):
 
@@ -96,6 +94,19 @@ class MainWindow(qtw.QMainWindow):
         self.ui.dateEdit_2.setDate(
             qtc.QDate(date.today().year, date.today().month, date.today().day))
         self.ui.scrollArea.mousePressEvent = self.reset_selected_issue
+
+        # Issue return sheet
+        self.ui.show_issue_return.clicked.connect(self.show_issue_return)
+        self.ui.dateEdit.setDate(
+            qtc.QDate(date.today().year, date.today().month, date.today().day))
+        self.ui.issue_returned.clicked.connect(self.issue_returned)
+        self.ui.issue_returned.setEnabled(False)
+        self.ui.reset_issue_return.setEnabled(False)
+
+        # Sale tab
+        self.ui.reset_sale_table.setEnabled(False)
+        self.ui.sale_button.setEnabled(False)
+        self.ui.show_sale_2.clicked.connect(self.show_sale)
 
         # tabel
         # self.ui.find_stock_preview.clicked.connect(lambda : self.ui.delete_entry.setEnabled(True))
@@ -278,6 +289,104 @@ class MainWindow(qtw.QMainWindow):
 
         return palette
 
+    def show_sale(self):
+        approval_no = self.ui.approval_no_3.value()
+        self.sale_approval_list = []
+        for dicti in self.issue_sheet:
+            if dicti["APPROVAL NO."] == approval_no:
+                self.sale_approval_list.append(deepcopy(dicti))
+        
+        self.load_data_in_tabel(self.ui.sale_table, self.sale_approval_list, len(self.sale_approval_list))
+
+    def issue_returned(self):
+        found_list = []
+        sheet_index = 0
+        for dicti in self.stock_sheet:
+            count = 0
+            for row in self.issue_approval_list:
+                row["Weight returned"] = row["Weight returned"].value()
+
+                if dicti["SKU"] == row["SKU"]:
+                    # check if this approval also exists in issue_return_sheet
+                    already_returned_weight = 0
+                    i = 0
+                    for return_dicti in self.issue_return_sheet:
+                        if return_dicti["APPROVAL NO."] == row["APPROVAL NO."]:
+                            if return_dicti["SKU"] == row["SKU"]:
+                                already_returned_weight = return_dicti["Weight returned"]
+                                del(self.issue_return_sheet[i])
+                                break
+                        i += 1
+
+                    dicti["Weight in Hand"] += row["Weight returned"]
+                    dicti["Issue Qty"] -= row["Weight returned"]
+                    self.load_data_in_tabel(
+                        self.ui.current_stock, values=dicti,
+                        rowcount=self.ui.current_stock.rowCount(),
+                        columns=self.schema["stock_sheet"]["columns"],
+                        affected_row=sheet_index)
+                    row["Weight returned"] += already_returned_weight
+                    # delete item from issue_sheet if all weight is returned
+                    if row["Weight returned"] == 0:
+                        issue_i = 0
+                        for issue_dicti in self.issue_sheet:
+                            if issue_dicti["APPROVAL NO."] == row["APPROVAL NO."]:
+                                if issue_dicti["SKU"] == issue_dicti["SKU"]:
+                                    break
+                            issue_i += 1
+                        del(self.issue_sheet[issue_i])
+
+                    found_list.append(self.issue_approval_list.pop(count))
+                    break
+                count += 1
+            sheet_index += 1
+        assert (bool(self.issue_approval_list) == False)
+        self.issue_return_sheet.extend(found_list)
+        self.reset_issue_return()
+
+    def reset_issue_return(self):
+        self.ui.issue_returned.setEnabled(False)
+        self.ui.reset_issue_return.setEnabled(False)
+        self.ui.issue_return_table.clear()
+        self.ui.issue_return_table.setRowCount(0)
+        self.ui.issue_return_table.setColumnCount(
+            len(self.schema["issue_return_sheet"]["columns"]))
+        self.ui.issue_return_table.setHorizontalHeaderLabels(
+            self.schema["issue_return_sheet"]["columns"])
+
+    def show_issue_return(self):
+        approval_no = self.ui.approval_no.value()
+        return_date = self.ui.dateEdit.text()
+
+        self.issue_approval_list = []
+        for dicti in self.issue_sheet:
+            if dicti["APPROVAL NO."] == approval_no:
+                # check if this approval also exists in issue_return_sheet
+                already_returned_weight = 0
+                for return_dicti in self.issue_return_sheet:
+                    if return_dicti["APPROVAL NO."] == approval_no:
+                        if return_dicti["SKU"] == dicti["SKU"]:
+                            already_returned_weight = return_dicti["Weight returned"]
+                            break
+                qspinbox = qtw.QDoubleSpinBox()
+                qspinbox.setMaximum(
+                    dicti["Weight issued"]-already_returned_weight)
+                qspinbox.setValue(
+                    dicti["Weight issued"]-already_returned_weight)
+                qspinbox.setDecimals(2)
+                qspinbox.setToolTip(
+                    "Previously returned weight {}".format(already_returned_weight))
+                temp_item = {"Weight returned": qspinbox,
+                             "Return Date": return_date}
+                temp_item.update(deepcopy(dicti))
+                self.issue_approval_list.append(temp_item)
+        read_only = deepcopy(self.schema["issue_return_sheet"]["columns"])
+        read_only.remove("Weight returned")
+        self.load_data_in_tabel(self.ui.issue_return_table, self.issue_approval_list, len(
+            self.issue_approval_list), self.schema["issue_return_sheet"]["columns"], read_only=read_only, set_cell_widget="Weight returned")
+        self.ui.issue_returned.setEnabled(True)
+        self.ui.reset_issue_return.setEnabled(True)
+
     def add_sku(self):
         # Validate if approval number is unique
         approval_no = self.ui.approval_no_2.value()
@@ -320,21 +429,14 @@ class MainWindow(qtw.QMainWindow):
             self.ui.dateEdit_2.setReadOnly(True)
             self.ui.approval_no_2.setReadOnly(True)
 
-            item_to_add = {"stock index": self.sheet_index_add_sku}
-            item_to_add = deepcopy(self.stock_sheet[self.sheet_index_add_sku])
+            item_to_add = {"stock index": self.sheet_index_add_sku+1}
+            item_to_add.update(
+                deepcopy(self.stock_sheet[self.sheet_index_add_sku]))
             # check if sku aleady in issue_sheet_skus
             # if item_to_add["SKU"] in self.issue_sheet_skus:
             #     self.ui.enter_sku_code.setPalette(self.red_palette())
             #     self.ui.statusbar.showMessage("SKU already in approval")
             #     return
-
-            self.stock_sheet[self.sheet_index_add_sku]["Weight in Hand"] -= self.ui.Weight_to_add.value()
-            self.stock_sheet[self.sheet_index_add_sku]["Issue Qty"] += self.ui.Weight_to_add.value()
-            self.load_data_in_tabel(
-                self.ui.current_stock, values=self.stock_sheet[self.sheet_index_add_sku],
-                rowcount=self.ui.current_stock.rowCount(),
-                columns=self.stock_sheet[self.sheet_index_add_sku],
-                affected_row=self.sheet_index_add_sku)
 
             if self.ui.add_sku.text() == "Add":
                 self.issue_sheet_skus.append(copy(item_to_add["SKU"]))
@@ -346,14 +448,13 @@ class MainWindow(qtw.QMainWindow):
                             "Remarks",
                             "Date"]:
                     del(item_to_add[key])
-                item_to_add["Approval Date"] = self.ui.dateEdit_2.date(
-                ).toString()
+                item_to_add["Approval Date"] = self.ui.dateEdit_2.text()
                 item_to_add["APPROVAL NO."] = self.ui.approval_no_2.value()
                 item_to_add["BROKER NAME"] = self.ui.broker_name.text()
                 item_to_add["PARTY NAME"] = self.ui.party_name.text()
                 item_to_add["Weight issued"] = self.ui.Weight_to_add.value()
                 item_dict = {}
-                for key in self.schema["issue_sheet"]["columns"]:
+                for key in ["stock index"]+self.schema["issue_sheet"]["columns"]:
                     if item_to_add.get(key):
                         item_dict[key] = item_to_add[key]
                     else:
@@ -368,11 +469,12 @@ class MainWindow(qtw.QMainWindow):
                 row_count = self.ui.issue_items.rowCount()
                 for dicti in self.issue_sheet_items:
                     if dicti["SKU"] == item_to_add["SKU"]:
-                        dicti["Weight issued"] += self.ui.Weight_to_add.value()
+                        dicti["Weight issued"] = self.ui.Weight_to_add.value()
                         item_dict = deepcopy(dicti)
                         break
                     affected_row += 1
                 self.ui.add_sku.setText("Add")
+
             self.load_data_in_tabel(
                 self.ui.issue_items, values=item_dict,
                 rowcount=row_count,
@@ -387,10 +489,11 @@ class MainWindow(qtw.QMainWindow):
             self.ui.clear_issue_stock.click()
 
     def issue_approval(self):
-        filepath = qtw.QFileDialog.getSaveFileName(self, "Save File", filter=".docx")
-        
+        filepath = qtw.QFileDialog.getSaveFileName(
+            self, "Save File", filter=".docx")
+
         if bool(filepath):
-            filepath = filepath[0]+ filepath[1]
+            filepath = filepath[0] + filepath[1]
             self.ui.approval_issue.setEnabled(False)
             self.ui.Delete_issue_items.setEnabled(False)
             self.ui.reset_issue_items.setEnabled(False)
@@ -400,7 +503,9 @@ class MainWindow(qtw.QMainWindow):
             for row in range(len(self.issue_sheet_items)):
                 index = 0
                 for col in list(self.issue_sheet_items[row]):
-                    if not bool(self.issue_sheet_items[row][col]):
+                    if col in ["SELECTION YES/NO",
+                               "SELECTION CRITERIA",
+                               "ASKING RATE", "Remarks"]:
                         try:
                             self.issue_sheet_items[row][col] = self.ui.issue_items.item(
                                 row, index).text()
@@ -408,6 +513,18 @@ class MainWindow(qtw.QMainWindow):
                             self.issue_sheet_items[row][col] = self.ui.issue_items.item(
                                 row, index)
                     index += 1
+                self.stock_sheet[self.issue_sheet_items[row]["stock index"]-1
+                                 ]["Weight in Hand"] -= self.issue_sheet_items[row]["Weight issued"]
+                self.stock_sheet[self.issue_sheet_items[row]["stock index"]-1
+                                 ]["Issue Qty"] += self.issue_sheet_items[row]["Weight issued"]
+                self.load_data_in_tabel(
+                    self.ui.current_stock, values=self.stock_sheet[
+                        self.issue_sheet_items[row]["stock index"]-1],
+                    rowcount=self.ui.current_stock.rowCount(),
+                    columns=self.schema["stock_sheet"]["columns"],
+                    affected_row=self.issue_sheet_items[row]["stock index"]-1)
+                del(self.issue_sheet_items[row]["stock index"])
+            self.issue_sheet.extend(self.issue_sheet_items)
 
             doc = docx.Document("test_project/approval_format.docx")
             p = doc.paragraphs[0]
@@ -438,16 +555,16 @@ class MainWindow(qtw.QMainWindow):
                     elif j == 3:
                         t.cell(i, j).text = str(
                             self.issue_sheet_items[i-1]["ASKING RATE"])
-            
+
             try:
                 t.style = 'Table-Grid'
             except:
-                #May only work in windows
+                # May only work in windows
                 False
 
             # print_dlg = qtp.QPrintPreviewDialog()
             # if print_dlg.exec_() == qtw.QDialog.Accepted:
-            
+
             doc.save(filepath)
 
             self.ui.broker_name.setReadOnly(False)
@@ -455,6 +572,10 @@ class MainWindow(qtw.QMainWindow):
             self.ui.dateEdit_2.setReadOnly(False)
             self.ui.approval_no_2.setReadOnly(False)
             self.set_approval_no()
+            # clear variables
+            self.sheet_index_add_sku = None
+            self.issue_sheet_skus = []
+            self.issue_sheet_items = []
 
     def delete_item_from_issue_table(self):
         if len(self.ui.issue_items.selectedIndexes()) == self.ui.issue_items.columnCount() and self.ui.issue_items.selectedIndexes().count(self.ui.issue_items.selectedIndexes()[0]) == len(self.ui.issue_items.selectedIndexes()):
@@ -837,20 +958,43 @@ class MainWindow(qtw.QMainWindow):
                 self.ui.edit_button_2.setEnabled(True)
                 self.ui.delete_entry_2.setEnabled(True)
 
-    def load_data_in_tabel(self, tabel, values, rowcount, columns, affected_row=None, read_only=[]):
+    def load_data_in_tabel(self, tabel, values, rowcount, columns, affected_row=None, read_only=[], set_cell_widget=False):
         # affected_row =
         assert(isinstance(tabel, qtw.QTableWidget))
         tabel.setRowCount(rowcount)
+        # if return_weight_col:
+        #     columns.insert(0, "Weight returned")
+        #     columns.insert(1, "Return Date")
+        #     tabel.setColumnCount(
+        #     len(columns))
+        #     tabel.setHorizontalHeaderLabels(
+        #         columns)
         tabel.setColumnCount(
             len(columns))
         tabel.setHorizontalHeaderLabels(
             columns)
         if affected_row == None:
             # load entire data in table
-            for row, dicti in enumerate(values):
-                for col, key in enumerate(dicti):
-                    tabel.setItem(
-                        row, col, qtw.QTableWidgetItem(str(dicti[key])))
+            if bool(read_only):
+                for row, dicti in enumerate(values):
+                    for col, key in enumerate(dicti):
+                        # here values is one dict
+                        item = dicti[key] if set_cell_widget == key else qtw.QTableWidgetItem(
+                            str(dicti[key]))
+                        if key in read_only:
+                            item.setFlags(qtc.Qt.ItemIsSelectable | qtc.Qt.ItemIsDragEnabled |
+                                          qtc.Qt.ItemIsDropEnabled | qtc.Qt.ItemIsUserCheckable | qtc.Qt.ItemIsEnabled)
+                        if key == set_cell_widget:
+                            tabel.setCellWidget(row, col, item)
+                        else:
+                            tabel.setItem(row, col,
+                                          item)
+            else:
+                for row, dicti in enumerate(values):
+                    for col, key in enumerate(dicti):
+                        # here values is one dict
+                        tabel.setItem(row, col,
+                                      qtw.QTableWidgetItem(str(dicti[key])))
 
         else:
             # load only the respective data
