@@ -378,7 +378,7 @@ class Ui_MainWindow(object):
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
         self.scrollAreaWidgetContents = QtWidgets.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 1057, 662))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, -293, 1057, 662))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.gridLayout_6 = QtWidgets.QGridLayout(self.scrollAreaWidgetContents)
         self.gridLayout_6.setObjectName("gridLayout_6")
@@ -2017,7 +2017,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "Stock Manager"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Carat Inventory Management"))
         self.Add_stock.setText(_translate("MainWindow", "Add"))
         self.reset_find_preview.setText(_translate("MainWindow", "Reset"))
         self.label_12.setText(_translate("MainWindow", "| Current Inventory"))
