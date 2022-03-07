@@ -107,8 +107,8 @@
     },
     "approval_no": 1,
     "items": {
-        "RUBY": "rby",
-        "RUBY GLASS FILLED": "rgf",
+        "RUBY": "RBY",
+        "RUBY GLASS FILLED": "RGF",
         "BLUE SAPPHIRE GLASS FILLED": "BGF",
         "DIFFUSED SAPPHIRE": "BLD",
         "BLUE SAPPHIRE": "BLS",
@@ -140,7 +140,7 @@
         "MAMBILLA": "MB",
         "BERYLLIUM": "BE",
         "BANGACHA": "BG",
-        "N/A": "OO"
+        "N/A": "00"
     },
     "shapes": [
         "OV",

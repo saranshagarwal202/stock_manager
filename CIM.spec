@@ -4,10 +4,10 @@
 block_cipher = None
 
 
-a = Analysis(['MainWindow_backend.py'],
-             pathex=['bin/python'],
+a = Analysis(['CIM.py'],
+             pathex=[],
              binaries=[],
-             datas=[('schema.json', './'), ('approval_format.docx', './')],
+             datas=[],
              hiddenimports=[],
              hookspath=[],
              hooksconfig={},
